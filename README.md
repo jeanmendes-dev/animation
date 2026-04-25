@@ -2,14 +2,13 @@
 
 #===============================================================================
 # FIGARO UC1 - Create ADMAYO-like dataset from SDTM
-# Sources: QS* domains + MO + DM + SV
+# Robust version: handles files like QSUC.csv, qsuc.csv, qsuc.xpt.csv
 #===============================================================================
 
 library(data.table)
 library(dplyr)
 library(stringr)
-library(lubridate)
-library(readr)
+library(tidyr)
 
 #===============================================================================
 # CONFIG
@@ -17,7 +16,7 @@ library(readr)
 
 CONFIG <- list(
   input_dir  = "/domino/datasets/local/clinical-trial-data/SHP647UC301-FIGARO-UC1/data_updated/csv",
-  output_dir = "/domino/datasets/local/clinical-trial-data/SHP647UC301-FIGARO-UC1/data_updated/adam_like",
+  output_dir = "/domino/datasets/local/clinical-trial-data/SHP647UC301-FIGARO-UC1/data_updated",
   output_file = "admayo_figaro_uc1.csv"
 )
 
@@ -31,119 +30,47 @@ log_msg <- function(...) {
 # HELPERS
 #===============================================================================
 
-read_sdtm <- function(domain) {
-  file <- file.path(CONFIG$input_dir, paste0(domain, ".csv"))
-  
-  if (!file.exists(file)) {
-    log_msg("WARNING: File not found: ", file)
-    return(NULL)
-  }
-  
-  log_msg("Reading: ", domain)
-  df <- fread(file, sep = "auto", na.strings = c("", "NA", "N/A", "."))
-  names(df) <- toupper(names(df))
-  df
-}
-
 safe_date <- function(x) {
   suppressWarnings(as.Date(substr(as.character(x), 1, 10)))
 }
 
-derive_ady <- function(adt, rfstdtc) {
-  rfstdt <- safe_date(rfstdtc)
-  adt <- as.Date(adt)
+read_sdtm <- function(domain) {
   
-  ifelse(
-    is.na(adt) | is.na(rfstdt),
-    NA_integer_,
-    ifelse(adt >= rfstdt, as.integer(adt - rfstdt + 1), as.integer(adt - rfstdt))
-  )
+  files <- list.files(CONFIG$input_dir, full.names = TRUE)
+  
+  file <- files[
+    grepl(
+      paste0("^", domain, "(\\.|_|$)"),
+      basename(files),
+      ignore.case = TRUE
+    )
+  ]
+  
+  if (length(file) == 0) {
+    log_msg("WARNING: File not found for domain: ", domain)
+    return(NULL)
+  }
+  
+  file <- file[1]
+  log_msg("Reading: ", basename(file))
+  
+  df <- fread(file, sep = "auto", na.strings = c("", "NA", "N/A", "."))
+  names(df) <- toupper(names(df))
+  
+  return(df)
 }
-
-#===============================================================================
-# 1) LOAD SDTM DATASETS
-#===============================================================================
-
-dm <- read_sdtm("DM")
-sv <- read_sdtm("SV")
-mo <- read_sdtm("MO")
-
-qs_domains <- c(
-  "QSUC", "QSMS", "QSPG", "QSEA", "QSEQ", "QSIB",
-  "QSS2", "QSTS", "QSCR", "QSNS", "QSPI", "QSWP"
-)
-
-qs_list <- lapply(qs_domains, read_sdtm)
-names(qs_list) <- qs_domains
-qs_list <- qs_list[!sapply(qs_list, is.null)]
-
-#===============================================================================
-# 2) DISCOVERY - FIND MAYO-RELATED PARAMETERS
-#===============================================================================
-
-log_msg("Starting Mayo parameter discovery...")
-
-discover_qs <- rbindlist(
-  lapply(names(qs_list), function(dom) {
-    df <- qs_list[[dom]]
-    
-    if (!all(c("QSTESTCD", "QSTEST") %in% names(df))) return(NULL)
-    
-    df %>%
-      distinct(QSTESTCD, QSTEST, QSCAT) %>%
-      mutate(
-        SOURCE_DOMAIN = dom,
-        SEARCH_TEXT = str_to_upper(paste(QSTESTCD, QSTEST, QSCAT))
-      ) %>%
-      filter(str_detect(
-        SEARCH_TEXT,
-        "MAYO|STOOL|RECTAL|BLEED|BLEEDING|ENDOSCOP|PHYSICIAN|GLOBAL|ULCERATIVE|COLITIS|UC|SCORE"
-      ))
-  }),
-  fill = TRUE
-)
-
-discover_mo <- NULL
-
-if (!is.null(mo) && all(c("MOTESTCD", "MOTEST") %in% names(mo))) {
-  discover_mo <- mo %>%
-    distinct(MOTESTCD, MOTEST, MOCAT, MOLOC) %>%
-    mutate(
-      SOURCE_DOMAIN = "MO",
-      SEARCH_TEXT = str_to_upper(paste(MOTESTCD, MOTEST, MOCAT, MOLOC))
-    ) %>%
-    filter(str_detect(
-      SEARCH_TEXT,
-      "MAYO|ENDOSCOP|ULCER|ULCERATION|MUCOSA|MUCOSAL|ERYTHEMA|FRIABILITY|BLEED|COLON|RECTUM|SCORE"
-    ))
-}
-
-discovery_all <- bind_rows(discover_qs, discover_mo)
-
-discovery_path <- file.path(CONFIG$output_dir, "admayo_figaro_parameter_discovery.csv")
-fwrite(discovery_all, discovery_path)
-
-log_msg("Discovery exported to: ", discovery_path)
-
-#===============================================================================
-# 3) MAP RAW SDTM PARAMETERS TO ADMAYO PARAMCD
-#===============================================================================
-# NOTE:
-# This is a rule-based mapping using text patterns.
-# After running discovery, you should review admayo_figaro_parameter_discovery.csv
-# and adjust this mapping if needed.
 
 map_mayo_param <- function(testcd, test, cat = "", source_domain = "") {
   
   txt <- str_to_upper(paste(testcd, test, cat, source_domain))
   
   case_when(
-    str_detect(txt, "STOOL|FREQUENCY") ~ "SFSCORE",
-    str_detect(txt, "RECTAL|BLEED") ~ "RBSCORE",
-    str_detect(txt, "PHYSICIAN|GLOBAL") ~ "PGSCORE",
+    str_detect(txt, "STOOL|BOWEL|FREQUENCY") ~ "SFSCORE",
+    str_detect(txt, "RECTAL|BLEED|BLOOD") ~ "RBSCORE",
+    str_detect(txt, "PHYSICIAN|GLOBAL|PGA") ~ "PGSCORE",
     str_detect(txt, "ENDOSCOP|ENDOSCOPY|MUCOSAL|ULCER|FRIABILITY|ERYTHEMA") ~ "ENSCORE",
-    str_detect(txt, "MAYO") & str_detect(txt, "PARTIAL") ~ "PMAYO",
-    str_detect(txt, "MAYO") & str_detect(txt, "MODIFIED") ~ "MMAYO",
+    str_detect(txt, "PARTIAL") & str_detect(txt, "MAYO") ~ "PMAYO",
+    str_detect(txt, "MODIFIED") & str_detect(txt, "MAYO") ~ "MMAYO",
     str_detect(txt, "MAYO") ~ "MAYO",
     TRUE ~ NA_character_
   )
@@ -176,15 +103,97 @@ param_num <- function(paramcd) {
 }
 
 #===============================================================================
-# 4) STANDARDIZE QS DOMAINS TO ADaM-LIKE BDS STRUCTURE
+# 1) LOAD DATA
+#===============================================================================
+
+log_msg("Available files in input directory:")
+print(list.files(CONFIG$input_dir))
+
+dm <- read_sdtm("DM")
+sv <- read_sdtm("SV")
+mo <- read_sdtm("MO")
+
+qs_domains <- c(
+  "QSUC", "QSMS", "QSPG", "QSEA", "QSEQ", "QSIB",
+  "QSS2", "QSTS", "QSCR", "QSNS", "QSPI", "QSWP"
+)
+
+qs_list <- lapply(qs_domains, read_sdtm)
+names(qs_list) <- qs_domains
+qs_list <- qs_list[!sapply(qs_list, is.null)]
+
+if (length(qs_list) == 0 && is.null(mo)) {
+  stop("No QS* or MO datasets were loaded. Please check CONFIG$input_dir and file names.")
+}
+
+#===============================================================================
+# 2) DISCOVERY
+#===============================================================================
+
+log_msg("Starting Mayo parameter discovery...")
+
+discover_qs <- rbindlist(
+  lapply(names(qs_list), function(dom) {
+    
+    df <- qs_list[[dom]]
+    
+    if (!all(c("QSTESTCD", "QSTEST") %in% names(df))) return(NULL)
+    if (!"QSCAT" %in% names(df)) df$QSCAT <- NA_character_
+    
+    df %>%
+      distinct(QSTESTCD, QSTEST, QSCAT) %>%
+      mutate(
+        SOURCE_DOMAIN = dom,
+        SEARCH_TEXT = str_to_upper(paste(QSTESTCD, QSTEST, QSCAT))
+      ) %>%
+      filter(str_detect(
+        SEARCH_TEXT,
+        "MAYO|STOOL|BOWEL|RECTAL|BLEED|BLOOD|ENDOSCOP|PHYSICIAN|GLOBAL|PGA|SCORE|UC|COLITIS"
+      ))
+  }),
+  fill = TRUE
+)
+
+discover_mo <- NULL
+
+if (!is.null(mo) && all(c("MOTESTCD", "MOTEST") %in% names(mo))) {
+  
+  if (!"MOCAT" %in% names(mo)) mo$MOCAT <- NA_character_
+  if (!"MOLOC" %in% names(mo)) mo$MOLOC <- NA_character_
+  
+  discover_mo <- mo %>%
+    distinct(MOTESTCD, MOTEST, MOCAT, MOLOC) %>%
+    mutate(
+      SOURCE_DOMAIN = "MO",
+      SEARCH_TEXT = str_to_upper(paste(MOTESTCD, MOTEST, MOCAT, MOLOC))
+    ) %>%
+    filter(str_detect(
+      SEARCH_TEXT,
+      "MAYO|ENDOSCOP|ULCER|MUCOSA|MUCOSAL|ERYTHEMA|FRIABILITY|BLEED|COLON|RECTUM|SCORE"
+    ))
+}
+
+discovery_all <- bind_rows(discover_qs, discover_mo)
+
+discovery_path <- file.path(CONFIG$output_dir, "admayo_figaro_parameter_discovery.csv")
+fwrite(discovery_all, discovery_path)
+
+log_msg("Discovery exported to: ", discovery_path)
+log_msg("Discovery rows: ", nrow(discovery_all))
+
+#===============================================================================
+# 3) STANDARDIZE QS TO ADMAYO-LIKE STRUCTURE
 #===============================================================================
 
 standardize_qs <- function(df, dom) {
   
-  required <- c("STUDYID", "USUBJID", "QSSEQ", "QSTESTCD", "QSTEST",
-                "QSSTRESC", "QSSTRESN", "QSDTC", "QSDY", "VISITNUM")
+  required <- c(
+    "STUDYID", "USUBJID", "QSSEQ", "QSTESTCD", "QSTEST",
+    "QSSTRESC", "QSSTRESN", "QSDTC", "QSDY", "VISITNUM"
+  )
   
   missing_req <- setdiff(required, names(df))
+  
   if (length(missing_req) > 0) {
     log_msg("Skipping ", dom, " due to missing columns: ", paste(missing_req, collapse = ", "))
     return(NULL)
@@ -194,9 +203,8 @@ standardize_qs <- function(df, dom) {
   if (!"QSBLFL" %in% names(df)) df$QSBLFL <- NA_character_
   if (!"QSCAT" %in% names(df)) df$QSCAT <- NA_character_
   
-  out <- df %>%
+  df %>%
     mutate(
-      SOURCE_DOMAIN = dom,
       PARAMCD = map_mayo_param(QSTESTCD, QSTEST, QSCAT, dom),
       PARAM = param_label(PARAMCD),
       PARAMN = param_num(PARAMCD),
@@ -218,8 +226,6 @@ standardize_qs <- function(df, dom) {
       ABLFL, SRCDOM, SRCSEQ, SRCVAR,
       VISIT, VISITNUM
     )
-  
-  out
 }
 
 qs_adam <- rbindlist(
@@ -230,7 +236,7 @@ qs_adam <- rbindlist(
 log_msg("QS-derived Mayo records: ", nrow(qs_adam))
 
 #===============================================================================
-# 5) STANDARDIZE MO DOMAIN TO ADaM-LIKE STRUCTURE
+# 4) STANDARDIZE MO TO ADMAYO-LIKE STRUCTURE
 #===============================================================================
 
 mo_adam <- NULL
@@ -270,13 +276,22 @@ if (!is.null(mo) && all(c("MOTESTCD", "MOTEST", "MOSTRESC", "MOSTRESN", "MODTC",
 }
 
 #===============================================================================
-# 6) COMBINE DIRECT COMPONENTS
+# 5) COMBINE DIRECT COMPONENTS
 #===============================================================================
 
 admayo_base <- rbindlist(list(qs_adam, mo_adam), fill = TRUE) %>%
   distinct()
 
-# Fill AVISIT using SV if missing
+if (nrow(admayo_base) == 0) {
+  stop(
+    paste0(
+      "No Mayo-like records were found. ",
+      "Check admayo_figaro_parameter_discovery.csv and adjust map_mayo_param()."
+    )
+  )
+}
+
+# Fill missing VISIT using SV
 if (!is.null(sv) && all(c("USUBJID", "VISITNUM", "VISIT") %in% names(sv))) {
   
   sv_lookup <- sv %>%
@@ -297,26 +312,21 @@ if (!is.null(sv) && all(c("USUBJID", "VISITNUM", "VISIT") %in% names(sv))) {
 }
 
 #===============================================================================
-# 7) DERIVE COMPOSITE MAYO SCORES
+# 6) DERIVE COMPOSITE SCORES
 #===============================================================================
-# PMAYO = SFSCORE + RBSCORE + PGSCORE
-# MMAYO = SFSCORE + RBSCORE + ENSCORE
-# MAYO  = SFSCORE + RBSCORE + ENSCORE + PGSCORE
-#
-# Review these formulas against SAP/specification if available.
 
 component_wide <- admayo_base %>%
   filter(PARAMCD %in% c("SFSCORE", "RBSCORE", "ENSCORE", "PGSCORE")) %>%
   group_by(STUDYID, USUBJID, AVISIT, AVISITN, ADT, ADY, VISIT, VISITNUM, PARAMCD) %>%
   summarise(AVAL = first(na.omit(AVAL)), .groups = "drop") %>%
-  tidyr::pivot_wider(names_from = PARAMCD, values_from = AVAL)
+  pivot_wider(names_from = PARAMCD, values_from = AVAL)
 
 derive_composite <- function(df, paramcd, components) {
   
+  if (nrow(df) == 0) return(NULL)
+  
   missing_components <- setdiff(components, names(df))
-  if (length(missing_components) > 0) {
-    for (x in missing_components) df[[x]] <- NA_real_
-  }
+  for (x in missing_components) df[[x]] <- NA_real_
   
   df %>%
     mutate(
@@ -350,7 +360,7 @@ admayo_all <- rbindlist(
   distinct()
 
 #===============================================================================
-# 8) ADD BASELINE, CHG, PCHG, POST-BASELINE FLAG
+# 7) BASELINE, CHG, PCHG
 #===============================================================================
 
 baseline <- admayo_all %>%
@@ -368,7 +378,7 @@ admayo_all <- admayo_all %>%
   )
 
 #===============================================================================
-# 9) ADD DM SUBJECT-LEVEL VARIABLES
+# 8) ADD DM VARIABLES
 #===============================================================================
 
 if (!is.null(dm)) {
@@ -377,23 +387,16 @@ if (!is.null(dm)) {
     select(any_of(c(
       "STUDYID", "USUBJID", "SUBJID", "SITEID",
       "AGE", "AGEU", "SEX", "RACE", "ETHNIC", "COUNTRY",
-      "ARM", "ARMCD", "ACTARM", "ACTARMCD", "RFSTDTC"
+      "ARM", "ARMCD", "ACTARM", "ACTARMCD"
     ))) %>%
     distinct(STUDYID, USUBJID, .keep_all = TRUE)
   
   admayo_all <- admayo_all %>%
     left_join(dm_keep, by = c("STUDYID", "USUBJID"))
-  
-  if ("RFSTDTC" %in% names(admayo_all)) {
-    admayo_all <- admayo_all %>%
-      mutate(
-        ADY = ifelse(is.na(ADY), derive_ady(ADT, RFSTDTC), ADY)
-      )
-  }
 }
 
 #===============================================================================
-# 10) CREATE ANALYSIS FLAGS
+# 9) FINAL FLAGS + ORDER
 #===============================================================================
 
 admayo_final <- admayo_all %>%
@@ -402,10 +405,10 @@ admayo_final <- admayo_all %>%
     ANL02FL = ifelse(!is.na(BASE) & !is.na(AVAL), "Y", NA_character_),
     ANL03FL = ifelse(PARAMCD %in% c("PMAYO", "MMAYO", "MAYO"), "Y", NA_character_),
     ANL04FL = ifelse(SRCDOM != "DERIVED", "Y", NA_character_),
-    ANL05FL = ifelse(SRCDOM == "DERIVED", "Y", NA_character_),
-    ASEQ = row_number()
+    ANL05FL = ifelse(SRCDOM == "DERIVED", "Y", NA_character_)
   ) %>%
   arrange(USUBJID, PARAMN, AVISITN, ADT, PARAMCD) %>%
+  mutate(ASEQ = row_number()) %>%
   select(
     STUDYID, USUBJID,
     AVISIT, AVISITN, ADT, ADY,
@@ -425,22 +428,13 @@ admayo_final <- admayo_all %>%
   )
 
 #===============================================================================
-# 11) EXPORT
+# 10) EXPORT
 #===============================================================================
 
 output_path <- file.path(CONFIG$output_dir, CONFIG$output_file)
-
 fwrite(admayo_final, output_path)
 
-log_msg("ADMAYO-like dataset created successfully.")
-log_msg("Output: ", output_path)
-log_msg("Rows: ", nrow(admayo_final))
-log_msg("Subjects: ", length(unique(admayo_final$USUBJID)))
-log_msg("PARAMCDs: ", paste(unique(admayo_final$PARAMCD), collapse = ", "))
-
-#===============================================================================
-# 12) QC SUMMARY
-#===============================================================================
+qc_path <- file.path(CONFIG$output_dir, "admayo_figaro_qc_summary.csv")
 
 qc_param <- admayo_final %>%
   group_by(PARAMCD, PARAM, SRCDOM) %>%
@@ -452,7 +446,11 @@ qc_param <- admayo_final %>%
   ) %>%
   arrange(PARAMCD, SRCDOM)
 
-qc_path <- file.path(CONFIG$output_dir, "admayo_figaro_qc_summary.csv")
 fwrite(qc_param, qc_path)
 
-log_msg("QC summary exported to: ", qc_path)
+log_msg("ADMAYO-like dataset created successfully.")
+log_msg("Output: ", output_path)
+log_msg("Rows: ", nrow(admayo_final))
+log_msg("Subjects: ", length(unique(admayo_final$USUBJID)))
+log_msg("PARAMCDs: ", paste(unique(admayo_final$PARAMCD), collapse = ", "))
+log_msg("QC summary: ", qc_path)
