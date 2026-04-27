@@ -1,25 +1,19 @@
 # animation
 
-07 — Data Search from Analysis-Ready Datasets (ARDs) [Exploration]
+Hi Pablo, ran the manual inspection on the updated FIGARO-UC1 dataset. Here's what I found:
 
-In this final phase, the objective is to develop a structured data search layer on top of the Analysis-Ready Datasets (ARDs), enabling efficient identification and retrieval of specific variables, parameters (e.g., PARAMCD), and clinical signals across studies.
+📊 MES Scores identified (7 total):
+• ENSCORE — Endoscopy Final Score (0–3) ✅
+• MAYO — Mayo Score (composite)
+• MMAYO — Modified Mayo Score
+• PGSCORE — Physician Global Assessment (0–3) ✅
+• PMAYO — Partial Mayo Score
+• RBSCORE — Rectal Bleeding Score (0–3) ✅
+• SFSCORE — Stool Frequency Score
 
-This step focuses on building a searchable and user-friendly mechanism (e.g., R scripts or Shiny application) that allows the team to quickly locate relevant data elements without manually navigating multiple datasets.
+120 unique subjects · 71,967 records · 7 visit windows (Screening → Week 12/ET)
 
-The goal is to improve data accessibility, traceability, and usability, facilitating faster exploration and supporting both clinical understanding and downstream analysis.
+The ML training dataset is available at:
+📁 figaro_uc1_mes_labels.csv
 
-Objectives of this step:
-Enable fast lookup of parameters (PARAMCD/PARAM) and variables across ARDs
-Provide cross-study search capabilities (e.g., UNIFI, UNIFI-JR, FIGARO-UC1, GALAXI)
-Improve traceability of variables back to source datasets (ADaM/SDTM)
-Reduce manual effort in identifying where specific clinical data points are located
-Support exploratory analysis and feature discovery for ML modeling
-Outputs of this step:
-Searchable variable/parameter dashboard per study
-Centralized parameter (PMT) dictionary with search functionality
-Search tool (R script or Shiny app) for dynamic querying of ARDs
-Indexed mapping of variables and parameters across studies
-Tools / Scripts used:
-R (data.table / dplyr for fast search and indexing)
-Optional: R Shiny app for interactive exploration
-Script: data_search.R
+Let me know if anything else is needed before proceeding!
