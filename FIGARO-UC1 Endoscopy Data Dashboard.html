@@ -1,0 +1,365 @@
+
+<h2 class="sr-only">FIGARO-UC1 Endoscopy Data Dashboard — J&J Brand Style. 120 subjects, 7 visit windows, 7 MES score types, AVAL distribution, mean AVAL by Mayo category, full MES score summary, and ENSCORE detail.</h2>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .section-title {
+    font-size: 13px; font-weight: 700; color: #E4002B;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border-bottom: 2px solid #E4002B; padding-bottom: 4px; margin-bottom: 12px;
+  }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
+  .kpi { background: #E4002B; color: #fff; border-radius: 4px; padding: 14px 12px; }
+  .kpi-val { font-size: 28px; font-weight: 700; line-height: 1; }
+  .kpi-label { font-size: 11px; font-weight: 400; margin-top: 5px; opacity: 0.92; line-height: 1.3; }
+  .kpi-sub { font-size: 10px; opacity: 0.75; margin-top: 3px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .chart-panel { border: 1px solid #D3D1C7; border-radius: 4px; padding: 14px 14px 10px; background: #fff; }
+  .full-panel { border: 1px solid #D3D1C7; border-radius: 4px; padding: 14px 14px 10px; background: #fff; margin-bottom: 14px; }
+  .legend-row { display: flex; gap: 16px; font-size: 11px; color: #5F5E5A; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .leg-dot { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; }
+  .note { font-size: 10px; color: #888780; }
+  .divider { border: none; border-top: 2px solid #E4002B; margin: 20px 0 16px; opacity: 0.15; }
+  .enscore-label {
+    font-size: 12px; font-weight: 700; color: #E4002B;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .enscore-badge {
+    background: #E4002B; color: #fff; border-radius: 3px;
+    padding: 2px 8px; font-size: 10px; font-weight: 700;
+  }
+  .trend-arrow { font-size: 16px; font-weight: 700; color: #3B6D11; }
+</style>
+
+<div style="padding: 1rem 0; background: transparent;">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-val">120</div>
+      <div class="kpi-label">Unique subjects</div>
+      <div class="kpi-sub">Study SHP647UC301</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">7</div>
+      <div class="kpi-label">Visit windows</div>
+      <div class="kpi-sub">Screening → Wk 12/ET</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">7</div>
+      <div class="kpi-label">MES score types</div>
+      <div class="kpi-sub">Per subject per visit</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">71,967</div>
+      <div class="kpi-label">Total records</div>
+      <div class="kpi-sub">All with numeric AVAL</div>
+    </div>
+  </div>
+
+  <!-- AVAL dist + Mean AVAL by Mayo category -->
+  <div class="two-col">
+    <div class="chart-panel">
+      <div class="section-title">AVAL score distribution</div>
+      <div style="position:relative;width:100%;height:210px;">
+        <canvas id="avalDist" role="img" aria-label="Bar chart of AVAL score distribution. Most values cluster at 0-3, with a long tail for composite scores.">AVAL distribution across all MES score types.</canvas>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-title">Mean AVAL by Mayo category</div>
+      <div style="position:relative;width:100%;height:210px;">
+        <canvas id="catChart" role="img" aria-label="Horizontal bar chart showing Mayo Endoscopy mean AVAL higher than Mayo Daily Diary.">Mean AVAL per Mayo category.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- MES scores chart -->
+  <div class="full-panel">
+    <div class="section-title">MES scores — record count &amp; mean AVAL</div>
+    <div class="legend-row">
+      <span style="display:flex;align-items:center;gap:5px;">
+        <span style="display:inline-block;width:12px;height:12px;background:rgba(228,0,43,0.45);border-radius:2px;"></span>Record count
+      </span>
+      <span style="display:flex;align-items:center;gap:5px;">
+        <span style="display:inline-block;width:20px;height:3px;background:#2C2C2A;border-radius:2px;"></span>
+        <span style="display:inline-block;width:8px;height:8px;background:#2C2C2A;border-radius:50%;"></span>
+        Mean AVAL
+      </span>
+    </div>
+    <div style="position:relative;width:100%;height:260px;">
+      <canvas id="mesChart" role="img" aria-label="Combined bar and line chart. SFSCORE dominates record count (56,296). MMAYO has highest mean AVAL (10.87). ENSCORE is within 0-3 range.">All 7 MES score types with record count and mean AVAL.</canvas>
+    </div>
+  </div>
+
+  <!-- ENSCORE deep dive section -->
+  <hr class="divider">
+  <div class="enscore-label">
+    ENSCORE Deep Dive <span class="enscore-badge">Mayo Endoscopy Sub-score · 0–3</span>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-val">1,849</div>
+      <div class="kpi-label">ENSCORE records</div>
+      <div class="kpi-sub">4 visit windows</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">3</div>
+      <div class="kpi-label">Treatment arms</div>
+      <div class="kpi-sub">Placebo · 25mg · 75mg</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">2.45</div>
+      <div class="kpi-label">Mean at Screening</div>
+      <div class="kpi-sub">Moderate–severe disease</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">1.80</div>
+      <div class="kpi-label">Mean at Wk 12/ET Pt2</div>
+      <div class="kpi-sub">↓ −0.65 from screening</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="chart-panel">
+      <div class="section-title">Mean ENSCORE by visit</div>
+      <div style="font-size:11px;color:#5F5E5A;margin-bottom:10px;">
+        All subjects combined &nbsp;<span class="trend-arrow">↓</span>&nbsp;<span style="font-size:11px;color:#3B6D11;font-weight:700;">−0.65 from screening</span>
+      </div>
+      <div style="position:relative;width:100%;height:190px;">
+        <canvas id="enMean" role="img" aria-label="Line chart of mean ENSCORE across 4 visit windows. Declining trend from 2.45 at Screening to 1.80 at Week 12/ET Part 2.">Mean ENSCORE declines across visits.</canvas>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-title">Mean ENSCORE by treatment arm</div>
+      <div style="font-size:11px;color:#5F5E5A;margin-bottom:10px;">All visits combined</div>
+      <div style="position:relative;width:100%;height:190px;">
+        <canvas id="enTrt" role="img" aria-label="Bar chart comparing mean ENSCORE by treatment arm. SHP647 75mg shows lowest mean (2.01) vs Placebo (2.32) and 25mg (2.32).">SHP647 75mg shows lowest mean ENSCORE.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="full-panel">
+    <div class="section-title">ENSCORE distribution per visit — subject count by score</div>
+    <div class="legend-row">
+      <span><span class="leg-dot" style="background:#2C2C2A;"></span>Score 0 — Normal mucosa</span>
+      <span><span class="leg-dot" style="background:#888780;"></span>Score 1 — Mild (erythema, no friability)</span>
+      <span><span class="leg-dot" style="background:rgba(228,0,43,0.5);"></span>Score 2 — Moderate (friability, erosions)</span>
+      <span><span class="leg-dot" style="background:#E4002B;"></span>Score 3 — Severe (ulceration, spontaneous bleeding)</span>
+    </div>
+    <div style="position:relative;width:100%;height:240px;">
+      <canvas id="enStacked" role="img" aria-label="Stacked bar chart of ENSCORE grade distribution per visit. Score 3 dominates at Screening. Score 0 and 1 increase at Week 12/ET.">ENSCORE grade distribution per visit window.</canvas>
+    </div>
+  </div>
+
+  <div class="full-panel">
+    <div class="section-title">Subjects with ENSCORE data per visit</div>
+    <div style="font-size:11px;color:#5F5E5A;margin-bottom:10px;">
+      Note: Baseline/Week 0 has fewer subjects (108) as some screened subjects were not randomized
+    </div>
+    <div style="position:relative;width:100%;height:150px;">
+      <canvas id="enSubjects" role="img" aria-label="Bar chart of subject count per visit: 119 Screening, 108 Baseline, 101 Week 12 Part 1, 102 Week 12 Part 2.">Subject count per ENSCORE visit window.</canvas>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const RED     = '#E4002B';
+const RED_BAR = 'rgba(228,0,43,0.45)';
+const RED_MID = 'rgba(228,0,43,0.5)';
+const DARK    = '#2C2C2A';
+const GRAY    = '#888780';
+const GRAY_G  = '#D3D1C7';
+
+// AVAL distribution (grouped)
+new Chart(document.getElementById('avalDist'), {
+  type: 'bar',
+  data: {
+    labels: ['0','1','2','3','4','5','6','7','8','9','10','11','12','13+'],
+    datasets: [{
+      label: 'Records',
+      data: [17105,12749,12019,10154,4441,3643,3101,2222,1679,1253,1049,415,459,1678],
+      backgroundColor: RED, borderRadius: 2, barPercentage: 0.78
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { title: { display: true, text: 'AVAL value', font: { size: 11 }, color: GRAY }, ticks: { color: GRAY, font: { size: 11 } }, grid: { display: false } },
+      y: { title: { display: true, text: 'Record count', font: { size: 11 }, color: GRAY }, ticks: { color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G } }
+    }
+  }
+});
+
+// Mean AVAL by Mayo category
+new Chart(document.getElementById('catChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Mayo Endoscopy', 'Mayo Daily Diary'],
+    datasets: [{
+      label: 'Mean AVAL',
+      data: [4.19, 2.87],
+      backgroundColor: RED, borderRadius: 2, barPercentage: 0.5
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => 'Mean AVAL: ' + c.raw.toFixed(2) } }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Mean AVAL', font: { size: 11 }, color: GRAY }, ticks: { color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G } },
+      y: { ticks: { color: DARK, font: { size: 12 } }, grid: { display: false } }
+    }
+  }
+});
+
+// MES scores combined chart
+new Chart(document.getElementById('mesChart'), {
+  type: 'bar',
+  data: {
+    labels: ['ENSCORE','MAYO','MMAYO','PGSCORE','PMAYO','RBSCORE','SFSCORE'],
+    datasets: [
+      {
+        type: 'bar', label: 'Record count',
+        data: [1849, 424, 211, 411, 817, 11959, 56296],
+        backgroundColor: RED_BAR, borderRadius: 2, barPercentage: 0.6,
+        order: 2, yAxisID: 'y1'
+      },
+      {
+        type: 'line', label: 'Mean AVAL',
+        data: [2.18, 9.65, 10.87, 1.44, 6.46, 1.08, 3.21],
+        borderColor: DARK, backgroundColor: DARK,
+        pointBackgroundColor: DARK, pointBorderColor: '#fff',
+        pointBorderWidth: 1.5, pointRadius: 5, pointHoverRadius: 7,
+        borderWidth: 2, tension: 0.3, order: 1, yAxisID: 'y2'
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => c.dataset.label + ': ' + (c.dataset.yAxisID === 'y2' ? c.raw.toFixed(2) : c.raw.toLocaleString()) } }
+    },
+    scales: {
+      x: { ticks: { color: DARK, font: { size: 11 } }, grid: { display: false } },
+      y1: { type: 'linear', position: 'left', title: { display: true, text: 'Record count', font: { size: 11 }, color: RED }, ticks: { color: RED, font: { size: 11 } }, grid: { color: GRAY_G } },
+      y2: { type: 'linear', position: 'right', title: { display: true, text: 'Mean AVAL', font: { size: 11 }, color: DARK }, ticks: { color: DARK, font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+
+// ENSCORE mean by visit (line)
+new Chart(document.getElementById('enMean'), {
+  type: 'line',
+  data: {
+    labels: ['Screening', 'Baseline/Wk 0', 'Wk 12/ET Pt 1', 'Wk 12/ET Pt 2'],
+    datasets: [{
+      label: 'Mean ENSCORE',
+      data: [2.45, 2.35, 1.92, 1.80],
+      borderColor: RED, backgroundColor: RED,
+      pointBackgroundColor: RED, pointBorderColor: '#fff',
+      pointBorderWidth: 2, pointRadius: 6, pointHoverRadius: 8,
+      borderWidth: 2.5, tension: 0.3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => 'Mean ENSCORE: ' + c.raw.toFixed(2) } }
+    },
+    scales: {
+      x: { ticks: { color: DARK, font: { size: 10 } }, grid: { display: false } },
+      y: { min: 0, max: 3,
+        title: { display: true, text: 'Mean ENSCORE', font: { size: 11 }, color: GRAY },
+        ticks: { stepSize: 1, color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G }
+      }
+    }
+  }
+});
+
+// ENSCORE by treatment arm
+new Chart(document.getElementById('enTrt'), {
+  type: 'bar',
+  data: {
+    labels: ['Placebo', 'SHP647 25 mg', 'SHP647 75 mg'],
+    datasets: [{
+      label: 'Mean ENSCORE',
+      data: [2.32, 2.32, 2.01],
+      backgroundColor: [GRAY, RED_MID, RED],
+      borderRadius: 3, barPercentage: 0.55
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => 'Mean ENSCORE: ' + c.raw.toFixed(2) } }
+    },
+    scales: {
+      x: { ticks: { color: DARK, font: { size: 11 } }, grid: { display: false } },
+      y: { min: 0, max: 3,
+        title: { display: true, text: 'Mean ENSCORE', font: { size: 11 }, color: GRAY },
+        ticks: { stepSize: 1, color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G }
+      }
+    }
+  }
+});
+
+// ENSCORE stacked per visit
+new Chart(document.getElementById('enStacked'), {
+  type: 'bar',
+  data: {
+    labels: ['Screening', 'Baseline/Wk 0', 'Wk 12/ET Pt 1', 'Wk 12/ET Pt 2'],
+    datasets: [
+      { label: 'Score 0 — Normal',    data: [23,  0, 76, 25], backgroundColor: DARK,    borderRadius: 0, stack: 'a' },
+      { label: 'Score 1 — Mild',      data: [48, 37,150, 88], backgroundColor: GRAY,    borderRadius: 0, stack: 'a' },
+      { label: 'Score 2 — Moderate',  data: [243,91,128, 42], backgroundColor: RED_MID, borderRadius: 0, stack: 'a' },
+      { label: 'Score 3 — Severe',    data: [430,127,252, 89], backgroundColor: RED,    borderRadius: 0, stack: 'a' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.raw + ' subjects' } }
+    },
+    scales: {
+      x: { ticks: { color: DARK, font: { size: 10 } }, grid: { display: false } },
+      y: { title: { display: true, text: 'N subjects', font: { size: 11 }, color: GRAY },
+        ticks: { stepSize: 100, color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G }, stacked: true
+      }
+    }
+  }
+});
+
+// ENSCORE subjects per visit
+new Chart(document.getElementById('enSubjects'), {
+  type: 'bar',
+  data: {
+    labels: ['Screening', 'Baseline/Wk 0', 'Wk 12/ET Pt 1', 'Wk 12/ET Pt 2'],
+    datasets: [{
+      label: 'Subjects',
+      data: [119, 108, 101, 102],
+      backgroundColor: [RED, RED_MID, RED, RED],
+      borderRadius: 3, barPercentage: 0.5
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => 'Subjects: ' + c.raw } }
+    },
+    scales: {
+      x: { ticks: { color: DARK, font: { size: 10 } }, grid: { display: false } },
+      y: { min: 0, max: 130,
+        title: { display: true, text: 'N subjects', font: { size: 11 }, color: GRAY },
+        ticks: { stepSize: 20, color: GRAY, font: { size: 11 } }, grid: { color: GRAY_G }
+      }
+    }
+  }
+});
+</script>
