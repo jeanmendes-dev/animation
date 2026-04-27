@@ -1,29 +1,25 @@
 # animation
 
-06 — Data Storytelling from Analysis-Ready Datasets (ARDs) [Exploration]
+07 — Data Search from Analysis-Ready Datasets (ARDs) [Exploration]
 
-In this phase, the focus shifts from data preparation to data interpretation and communication. Using the Analysis-Ready Datasets (ARDs) generated for each study, we develop a structured data storytelling approach that combines data, visualizations, and narrative.
+In this final phase, the objective is to develop a structured data search layer on top of the Analysis-Ready Datasets (ARDs), enabling efficient identification and retrieval of specific variables, parameters (e.g., PARAMCD), and clinical signals across studies.
 
-The goal is to transform complex clinical data into clear, contextualized, and actionable insights, ensuring alignment with the study design and clinical relevance.
+This step focuses on building a searchable and user-friendly mechanism (e.g., R scripts or Shiny application) that allows the team to quickly locate relevant data elements without manually navigating multiple datasets.
 
-Study	Description
-UNIFI	IBD — Ulcerative Colitis (adult)
-UNIFI-JR	IBD — Ulcerative Colitis (pediatric)
-GALAXI-1	Crohn's Disease
-FIGARO-UC1	UC — SHP647UC301 / Foundation Model
+The goal is to improve data accessibility, traceability, and usability, facilitating faster exploration and supporting both clinical understanding and downstream analysis.
+
 Objectives of this step:
-Develop data-driven narratives based on ARDs for each study
-Combine clinical variables, derived parameters, and MES-related endpoints into meaningful stories
-Create visualizations (e.g., distributions, trends, correlations) to support interpretation
-Ensure alignment between observed data patterns and study design (induction / maintenance / screening)
-Highlight key insights, anomalies, and potential signals relevant for downstream ML modeling and clinical interpretation
+Enable fast lookup of parameters (PARAMCD/PARAM) and variables across ARDs
+Provide cross-study search capabilities (e.g., UNIFI, UNIFI-JR, FIGARO-UC1, GALAXI)
+Improve traceability of variables back to source datasets (ADaM/SDTM)
+Reduce manual effort in identifying where specific clinical data points are located
+Support exploratory analysis and feature discovery for ML modeling
 Outputs of this step:
-Data storytelling dashboards per study
-Insight-driven visualizations (e.g., MES distribution, longitudinal trends)
-Narrative summaries explaining clinical patterns and data behavior
-Integrated view of ARD variables to guide feature selection and modeling strategy
-Tools / Skills used:
-Clinical data storytelling
-Data visualization (R / ggplot / Shiny dashboards)
-Exploratory data analysis (EDA)
-Clinical interpretation aligned with CDISC/ADaM structures
+Searchable variable/parameter dashboard per study
+Centralized parameter (PMT) dictionary with search functionality
+Search tool (R script or Shiny app) for dynamic querying of ARDs
+Indexed mapping of variables and parameters across studies
+Tools / Scripts used:
+R (data.table / dplyr for fast search and indexing)
+Optional: R Shiny app for interactive exploration
+Script: data_search.R
