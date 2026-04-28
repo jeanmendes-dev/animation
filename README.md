@@ -1,28 +1,26 @@
 # animation
 
-/domino/project/
+################ criar db a partir de dataset grande
 
-├── data/
-│   ├── raw/                     # Dados brutos (SDTM, SAS, etc)
-│   ├── processed/               # Dados intermediários
-│   ├── db/                      # 🔥 DuckDB fica aqui
-│   │   └── clinical_data.duckdb
-│   ├── exports/                 # CSVs leves para o time
-│   │   ├── ard_mes.csv
-│   │   ├── ard_summary.csv
-│   │   └── sample_1000_rows.csv
-│   └── parquet/                 # (opcional) dados otimizados
-│
-├── scripts/
-│   ├── 01_ingestion.R
-│   ├── 02_build_duckdb.R
-│   ├── 03_feature_engineering.R
-│   ├── 04_export_csv.R
-│
-├── outputs/
-│   ├── reports/
-│   └── logs/
-│
-└── README.md
+library(DBI)
+library(duckdb)
 
-To avoid performance issues with very large CSV files, I’m keeping the full compiled dataset in DuckDB as the master analytical database. From this master file, I can export smaller CSV extracts for review, sharing, and validation, depending on the specific study, domain, parameters, or variables needed.
+con <- dbConnect(duckdb(), "/domino/project/data/db/clinical_data.duckdb")
+
+dbExecute(con, "
+CREATE TABLE galaxi_ml AS
+SELECT * FROM read_csv_auto('/domino/.../galaxi_ml_dataset.csv')
+")
+
+
+############## criar exports para o time
+
+dbExecute(con, "
+COPY (
+  SELECT *
+  FROM galaxi_ml
+  WHERE PARAMCD = 'MES'
+)
+TO '/domino/project/data/exports/ard_mes.csv'
+WITH (HEADER, DELIMITER ',')
+")
