@@ -246,8 +246,13 @@ load_datasets <- function(path) {
     })
   })
 
-  # tolower do basename sem extensão → "adae.sas7bdat" → "adae"
-  names(datasets) <- tolower(tools::file_path_sans_ext(basename(files)))
+  # Normalizar nomes: remove TODAS as extensões conhecidas, inclusive
+  # nomes duplos como "adae.sas7bdat.csv" → "adae".
+  # file_path_sans_ext() remove apenas a última extensão; o gsub
+  # limpa qualquer sufixo .sas7bdat residual após esse passo.
+  raw_names <- tolower(tools::file_path_sans_ext(basename(files)))
+  clean_names <- gsub("\\.sas7bdat$", "", raw_names)
+  names(datasets) <- clean_names
   datasets <- datasets[!sapply(datasets, is.null)]
 
   # Registrar shape original para o coverage report
