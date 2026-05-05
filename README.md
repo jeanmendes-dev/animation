@@ -2,6 +2,7 @@
 
 # ============================================================
 # CONSOLIDAÇÃO INTELIGENTE DE ARDs (MULTI-LOAD)
+# Aceita paths de pastas OU arquivos CSV diretamente
 # ============================================================
 
 library(tidyverse)
@@ -15,9 +16,9 @@ library(purrr)
 
 CONFIG <- list(
   input_paths = c(
-    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1899/Data/csv",
-    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1901/Data/csv",
-    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1903/Data/csv"
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI/load-1899/data/ard/unifi_load1899_ard.csv",
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI/load-1901/data/ard/unifi_load1901_ard.csv",
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI/load-1903/data/ard/unifi_load1903_ard.csv"
   ),
   
   output_dir = "/mnt/ard_merged",
@@ -70,46 +71,76 @@ collapse_unique_values <- function(x) {
   paste(ux, collapse = " || ")
 }
 
+extract_load_name <- function(path) {
+  parts <- str_split(path, "/", simplify = TRUE)
+  load_part <- parts[str_detect(parts, "^load-[0-9]+$")]
+  
+  if (length(load_part) > 0) {
+    return(load_part[length(load_part)])
+  }
+  
+  tools::file_path_sans_ext(basename(path))
+}
+
 # ============================================================
-# 1. DETECTAR TODOS OS CSVs DOS LOADS
+# 1. DETECTAR ARQUIVOS CSV
 # ============================================================
 
 get_all_csvs <- function(paths) {
+  
   map_dfr(paths, function(p) {
     
-    files <- list.files(
-      path = p,
-      pattern = "\\.csv$",
-      full.names = TRUE
-    )
-    
-    if (length(files) == 0) {
-      message("[WARNING] Nenhum CSV encontrado em: ", p)
+    if (file.exists(p) && !dir.exists(p) && str_detect(tolower(p), "\\.csv$")) {
+      
+      return(tibble(
+        file = p,
+        load_path = dirname(p),
+        load_name = extract_load_name(p)
+      ))
+      
+    } else if (dir.exists(p)) {
+      
+      files <- list.files(
+        path = p,
+        pattern = "\\.csv$",
+        full.names = TRUE
+      )
+      
+      if (length(files) == 0) {
+        message("[WARNING] Nenhum CSV encontrado na pasta: ", p)
+        return(tibble())
+      }
+      
+      return(tibble(
+        file = files,
+        load_path = p,
+        load_name = map_chr(files, extract_load_name)
+      ))
+      
+    } else {
+      
+      message("[WARNING] Path não encontrado ou inválido: ", p)
       return(tibble())
     }
-    
-    tibble(
-      file = files,
-      load_path = p,
-      load_name = basename(dirname(dirname(p))) # ex: load-1903
-    )
   })
 }
 
 file_map <- get_all_csvs(CONFIG$input_paths)
 
 if (nrow(file_map) == 0) {
-  stop("Nenhum CSV encontrado nos paths informados.")
+  stop("Nenhum CSV válido encontrado nos paths informados.")
 }
 
 cat("\n[INFO] Arquivos detectados:\n")
 print(file_map)
 
 # ============================================================
-# 2. LEITURA DOS DATASETS
+# 2. LEITURA DOS ARDs
 # ============================================================
 
 read_ard <- function(file, load_name) {
+  
+  cat("\n[INFO] Lendo arquivo:", file, "\n")
   
   df <- read_csv(
     file,
@@ -121,8 +152,13 @@ read_ard <- function(file, load_name) {
   missing_keys <- setdiff(CONFIG$key_vars, names(df))
   
   if (length(missing_keys) > 0) {
-    stop(paste0("Arquivo ", file, " não possui as chaves: ",
-                paste(missing_keys, collapse = ", ")))
+    stop(
+      paste0(
+        "Arquivo ", file,
+        " não possui as chaves obrigatórias: ",
+        paste(missing_keys, collapse = ", ")
+      )
+    )
   }
   
   df %>%
@@ -145,7 +181,7 @@ ard_list <- pmap(
 names(ard_list) <- paste0(file_map$load_name, "_", basename(file_map$file))
 
 # ============================================================
-# 3. RELATÓRIO POR LOAD
+# 3. RELATÓRIO POR LOAD / ARQUIVO
 # ============================================================
 
 load_report <- map2_dfr(
@@ -153,6 +189,8 @@ load_report <- map2_dfr(
   names(ard_list),
   ~ tibble(
     dataset = .y,
+    source_load = unique(.x$.SOURCE_LOAD),
+    source_file = unique(.x$.SOURCE_FILE),
     n_rows = nrow(.x),
     n_unique_keys = n_distinct(.x$.ROW_KEY),
     n_columns = ncol(.x) - 4
@@ -170,6 +208,7 @@ column_report <- map2_dfr(
   names(ard_list),
   ~ tibble(
     dataset = .y,
+    source_load = unique(.x$.SOURCE_LOAD),
     column = setdiff(names(.x), technical_cols)
   )
 )
@@ -177,8 +216,9 @@ column_report <- map2_dfr(
 column_origin_report <- column_report %>%
   group_by(column) %>%
   summarise(
-    present_in = paste(unique(dataset), collapse = " | "),
-    n_datasets = n_distinct(dataset),
+    present_in_loads = paste(unique(source_load), collapse = " | "),
+    present_in_datasets = paste(unique(dataset), collapse = " | "),
+    n_loads = n_distinct(source_load),
     .groups = "drop"
   )
 
@@ -190,7 +230,7 @@ all_ards <- bind_rows(ard_list) %>%
   mutate(across(everything(), as.character))
 
 # ============================================================
-# 6. CONSOLIDAÇÃO INTELIGENTE
+# 6. CONSOLIDAÇÃO INTELIGENTE POR CHAVE
 # ============================================================
 
 value_cols <- setdiff(
@@ -233,9 +273,9 @@ row_lineage <- all_ards %>%
     AVISITN = first(AVISITN),
     source_loads = paste(unique(.SOURCE_LOAD), collapse = " | "),
     source_files = paste(unique(.SOURCE_FILE), collapse = " | "),
-    n_rows = n(),
+    n_source_rows = n(),
     max_completeness = max(as.numeric(.NON_EMPTY_COUNT), na.rm = TRUE),
-    duplicate_flag = n() > 1,
+    duplicate_or_overlap = n() > 1,
     .groups = "drop"
   )
 
@@ -248,30 +288,38 @@ total_final <- nrow(final_ard)
 
 reconciliation_report <- load_report %>%
   mutate(
-    total_input_rows = total_input,
-    final_rows = total_final,
-    duplicates_removed = total_input - total_final
+    total_input_rows_all_loads = total_input,
+    total_final_rows = total_final,
+    duplicates_or_overlaps_removed = total_input - total_final
   )
 
 # ============================================================
-# 10. EXPORTAR
+# 10. EXPORTAR RESULTADOS
 # ============================================================
 
-write_csv(final_ard,
-          file.path(CONFIG$output_dir, CONFIG$output_csv),
-          na = "")
+write_csv(
+  final_ard,
+  file.path(CONFIG$output_dir, CONFIG$output_csv),
+  na = ""
+)
 
-write_csv(reconciliation_report,
-          file.path(CONFIG$output_dir, CONFIG$reconciliation_report_csv),
-          na = "")
+write_csv(
+  reconciliation_report,
+  file.path(CONFIG$output_dir, CONFIG$reconciliation_report_csv),
+  na = ""
+)
 
-write_csv(row_lineage,
-          file.path(CONFIG$output_dir, CONFIG$row_lineage_csv),
-          na = "")
+write_csv(
+  row_lineage,
+  file.path(CONFIG$output_dir, CONFIG$row_lineage_csv),
+  na = ""
+)
 
-write_csv(column_origin_report,
-          file.path(CONFIG$output_dir, CONFIG$column_report_csv),
-          na = "")
+write_csv(
+  column_origin_report,
+  file.path(CONFIG$output_dir, CONFIG$column_report_csv),
+  na = ""
+)
 
 # ============================================================
 # FINAL
@@ -279,7 +327,8 @@ write_csv(column_origin_report,
 
 cat("\n=============================================\n")
 cat("CONSOLIDAÇÃO FINALIZADA\n")
-cat("Linhas entrada:", total_input, "\n")
+cat("Linhas de entrada:", total_input, "\n")
 cat("Linhas finais:", total_final, "\n")
-cat("Removidos:", total_input - total_final, "\n")
+cat("Duplicatas/overlaps removidos:", total_input - total_final, "\n")
+cat("Output:", file.path(CONFIG$output_dir, CONFIG$output_csv), "\n")
 cat("=============================================\n")
