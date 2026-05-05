@@ -1,49 +1,98 @@
 # animation
 
-df_safe <- df %>%
-  mutate(
-    AVAL  = if ("AVAL" %in% names(.)) as.character(AVAL) else NA_character_,
-    AVALC = if ("AVALC" %in% names(.)) as.character(AVALC) else NA_character_
+CONFIG <- list(
+  input_paths = c(
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1899/Data/csv",
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1901/Data/csv",
+    "/domino/datasets/local/clinical-trial-data/CNTO1275UCO3001-UNIFI-LTE/load-1903/Data/csv"
+  ),
+  
+  output_dir = "/mnt/ard_merged",
+  
+  key_vars = c("USUBJID", "AVISIT", "AVISITN"),
+  
+  output_csv = "ard_consolidated.csv",
+  reconciliation_report_csv = "reconciliation_report.csv",
+  row_lineage_csv = "row_lineage_mapping.csv",
+  column_report_csv = "column_origin_report.csv"
+)
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ============================================================
+# 1. DETECTAR ARQUIVOS EM MÚLTIPLOS PATHS
+# ============================================================
+
+get_all_csvs <- function(paths) {
+  map_dfr(paths, function(p) {
+    
+    files <- list.files(
+      path = p,
+      pattern = "\\.csv$",
+      full.names = TRUE
+    )
+    
+    if (length(files) == 0) {
+      message("[WARNING] Nenhum CSV encontrado em: ", p)
+      return(tibble())
+    }
+    
+    tibble(
+      file = files,
+      load_path = p,
+      load_name = basename(dirname(dirname(p))) # pega "load-1903"
+    )
+  })
+}
+
+file_map <- get_all_csvs(CONFIG$input_paths)
+
+if (nrow(file_map) == 0) {
+  stop("Nenhum CSV encontrado nos paths informados.")
+}
+
+print(file_map)
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+read_ard <- function(file, load_name) {
+  
+  df <- read_csv(
+    file,
+    col_types = cols(.default = col_character()),
+    show_col_types = FALSE,
+    na = c("", "NA", "N/A", "NULL")
   )
+  
+  missing_keys <- setdiff(CONFIG$key_vars, names(df))
+  
+  if (length(missing_keys) > 0) {
+    stop(
+      paste0(
+        "Arquivo ", file,
+        " não possui as chaves obrigatórias: ",
+        paste(missing_keys, collapse = ", ")
+      )
+    )
+  }
+  
+  df %>%
+    make_key(CONFIG$key_vars) %>%
+    mutate(
+      .SOURCE_LOAD = load_name,
+      .SOURCE_FILE = basename(file),
+      .NON_EMPTY_COUNT = count_non_empty(
+        .,
+        exclude_cols = c(".ROW_KEY", ".SOURCE_LOAD", ".SOURCE_FILE")
+      )
+    )
+}
 
-paramcd_values <- df_safe %>%
-  filter(!is.na(PARAMCD) & PARAMCD != "") %>%
-  distinct(PARAMCD) %>%
-  pull(PARAMCD) %>%
-  as.character() %>%
-  sort()
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-pivot_df <- df_safe %>%
-  select(all_of(KEYS), PARAMCD, AVAL, AVALC) %>%
-  filter(!is.na(PARAMCD) & PARAMCD != "") %>%
-  mutate(
-    PARAMCD = as.character(PARAMCD),
-    PARAM_VALUE = coalesce(AVAL, AVALC),
-    VALUE_SOURCE = case_when(
-      !is.na(AVAL)  ~ "AVAL",
-      !is.na(AVALC) ~ "AVALC",
-      TRUE ~ "VALUE"
-    ),
-    pivot_name = paste0(dataset_name, "_PARAMCD_", PARAMCD, "_", VALUE_SOURCE)
-  ) %>%
-  select(all_of(KEYS), pivot_name, PARAM_VALUE) %>%
-  group_by(across(all_of(KEYS)), pivot_name) %>%
-  summarise(
-    PARAM_VALUE = {
-      values <- unique(na.omit(PARAM_VALUE))
-      if (length(values) == 0) NA_character_
-      else paste(values, collapse = " | ")
-    },
-    .groups = "drop"
-  ) %>%
-  pivot_wider(
-    names_from = pivot_name,
-    values_from = PARAM_VALUE
-  )
+ard_list <- pmap(
+  list(file_map$file, file_map$load_name),
+  read_ard
+)
 
-other_df <- df %>%
-  select(-PARAMCD, -any_of(c("AVAL", "AVALC"))) %>%
-  prefix_non_key_columns(dataset_name) %>%
-  collapse_duplicate_keys()
-
-final_df <- full_join(other_df, pivot_df, by = KEYS)
+names(ard_list) <- paste0(file_map$load_name, "_", basename(file_map$file))
